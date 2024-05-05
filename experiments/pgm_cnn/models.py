@@ -5,6 +5,8 @@ from abstractor import Abstractor
 from transformer_modules import Encoder
 import tensorflow as tf
 from tensorflow.keras import layers, Model
+from multi_attention_decoder import MultiAttentionDecoder
+
 #region common kwargs
 d_model = 512
 num_heads = 8
@@ -63,6 +65,40 @@ class AbstractorCNNModel(tf.keras.Model):
         x = self.abstractor(x) ## output is shape (batch, seq_len, d_model)
         x = self.flatten(x)
         x = self.hidden_dense(x)
+        logits = self.final_layer(x)
+        return logits
+
+    def print_summary(self, input_shape):
+        inputs = layers.Input(input_shape)
+        outputs = self.call(inputs)
+        print(tf.keras.Model(inputs, outputs, name=self.name).summary())
+
+
+
+
+class AbstractorCNNDecoderModel(tf.keras.Model):
+    def __init__(self, abstractor_kwargs, encoder_kwargs, decoder_kwargs, name=None):
+        super().__init__(name=name)
+        self.cnn = Encoder(encoder_type="cnn", **encoder_kwargs) 
+        #num_layers, num_kernels, kernel_size, stride, input_size, dropout_rate=0.1, name="cnn_encoder", dropout_in_cnn=False, mlp=[], **kwargs
+        self.abstractor = Abstractor(**abstractor_kwargs)
+        #self.pos_embedding_adder_input = AddPositionalEmbedding(name='add_pos_embedding_input')
+        self.flatten = layers.Flatten()
+        # initialize decoder
+        self.decoder = MultiAttentionDecoder(**decoder_kwargs, name='decoder')
+        self.hidden_dense = layers.Dense(32, activation='relu', name='hidden_layer')
+        self.final_layer = layers.Dense(8, activation='sigmoid', name='final_layer')
+
+    def call(self, inputs):
+        ## Need to reshape (batch, seq_len, height, width) to (batch*seq_len, height,width, 1)
+        seq_len = inputs.shape[1]
+        assert seq_len == 16
+        inputs = tf.reshape(inputs, [-1, inputs.shape[2], inputs.shape[3], 1])
+        cnn_embeddings = self.cnn(inputs)
+        cnn_embeddings = tf.reshape(cnn_embeddings, [-1, seq_len, cnn_embeddings.shape[1]])
+        abs_context = self.abstractor(cnn_embeddings) ## output is shape (batch, seq_len, d_model)
+        decoder_out = self.decoder([cnn_embeddings, abs_context])
+        x = self.flatten(decoder_out)
         logits = self.final_layer(x)
         return logits
 
