@@ -1,13 +1,13 @@
 import tensorflow as tf
 from tensorflow.keras import layers
-from transformer_modules import Encoder, AddPositionalEmbedding
+from transformer_modules import Encoder, AddPositionalEmbedding, Decoder
 from multi_attention_decoder import MultiAttentionDecoder
 from abstractor import Abstractor
 from symbol_retrieving_abstractor import SymbolRetrievingAbstractor
 from syntactic_abstractor import SyntacticAbstractor
 from abstracters import RelationalAbstracter, SymbolicAbstracter
 
-class AutoregressiveAbstractor(tf.keras.Model):
+class   AutoregressiveAbstractor(tf.keras.Model):
     """
     An implementation of an Abstractor-based Transformer module.
 
@@ -127,7 +127,7 @@ class AutoregressiveAbstractor(tf.keras.Model):
         # embed source and add positional embedding
         source = self.source_embedder(source)
         source = self.pos_embedding_adder_input(source)
-
+        #print(source.shape)
         # pass input to Encoder
         if self.use_encoder:
             encoder_context = self.encoder(source)
@@ -143,6 +143,7 @@ class AutoregressiveAbstractor(tf.keras.Model):
         # embed target and add positional embedding
         target_embedding = self.target_embedder(target)
         target_embedding = self.pos_embedding_adder_target(target_embedding)
+        #print(target.shape, target_embedding.shape, abstracted_context.shape)
 
         # decode context (either abstractor only or concatenation of encoder and abstractor outputs)
         if self.decoder_on == 'abstractor':
@@ -156,6 +157,7 @@ class AutoregressiveAbstractor(tf.keras.Model):
 
         # produce final prediction
         logits = self.final_layer(x)
+        #print(logits.shape)
 
         try:
           # Drop the keras mask, so it doesn't scale the losses/metrics. b/250038731
@@ -164,3 +166,146 @@ class AutoregressiveAbstractor(tf.keras.Model):
           pass
 
         return logits
+
+
+class Transformer(tf.keras.Model):
+    def __init__(self, num_layers, num_heads, dff,
+            input_vocab, target_vocab, embedding_dim, output_dim,
+            dropout_rate=0.1, name='transformer'):
+        """A transformer model.
+
+        Args:
+            num_layers (int): # of layers in encoder and decoder
+            num_heads (int): # of attention heads in attention operations
+            dff (int): dimension of feedforward laeyrs
+            input_vocab (int or str): if input is tokens, the size of vocabulary as an int. 
+                if input is vectors, the string 'vector'. used to create embedder.
+            target_vocab (int): if target is tokens, the size of the vocabulary as an int. 
+                if input is vectors, the string 'vector'. used to create embedder.
+            embedding_dim (int): embedding dimension to use. this is the model dimension.
+            output_dim (int): dimension of final output. e.g.: # of classes.
+            dropout_rate (float, optional): dropout rate. Defaults to 0.1.
+            name (str, optional): name of model. Defaults to 'transformer'.
+        """
+
+        super().__init__(name=name)
+
+        if isinstance(input_vocab, int):
+            self.source_embedder = tf.keras.layers.Embedding(input_vocab, embedding_dim, name='source_embedder')
+        elif input_vocab == 'vector':
+            self.source_embedder = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(embedding_dim), name='source_embedder')
+        else:
+            raise ValueError(
+                "`input_vocab` must be an integer if the input sequence is token-valued or "
+                "'vector' if the input sequence is vector-valued.")
+
+        if isinstance(target_vocab, int):
+            self.target_embedder = tf.keras.layers.Embedding(target_vocab, embedding_dim, name='target_embedder')
+        elif target_vocab == 'vector':
+            self.target_embedder = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(embedding_dim), name='target_embedder')
+        else:
+            raise ValueError(
+                "`input_vocab` must be an integer if the input sequence is token-valued or "
+                "'vector' if the input sequence is vector-valued.")
+
+        self.pos_embedding_adder_input = AddPositionalEmbedding(name='add_pos_embedding_input')
+        self.pos_embedding_adder_target = AddPositionalEmbedding(name='add_pos_embedding_target')
+
+        self.encoder = Encoder(num_layers=num_layers, num_heads=num_heads, dff=dff, dropout_rate=dropout_rate, name='encoder')
+        self.decoder = Decoder(num_layers=num_layers, num_heads=num_heads, dff=dff,
+          dropout_rate=dropout_rate, name='decoder')
+
+
+        self.final_layer = tf.keras.layers.Dense(output_dim, name='final_layer')
+
+
+    def call(self, inputs):
+        source, target  = inputs
+
+        x = self.source_embedder(source)
+        x = self.pos_embedding_adder_input(x)
+
+        encoder_context = self.encoder(x)
+
+        target_embedding = self.target_embedder(target)
+        target_embedding = self.pos_embedding_adder_target(target_embedding)
+
+        x = self.decoder(x=target_embedding, context=encoder_context)
+
+        logits = self.final_layer(x)
+
+        try:
+          # Drop the keras mask, so it doesn't scale the losses/metrics.
+          # b/250038731
+          del logits._keras_mask
+        except AttributeError:
+          pass
+
+        return logits
+    
+class CNNAttentionEncoder(tf.keras.Model):
+    def __init__(self, num_layers, num_heads, dff,
+            input_vocab, target_vocab, embedding_dim, output_dim,
+            dropout_rate=0.1, name="CNNAttention", cnn_encoder_args=None):
+        super().__init__(name=name)
+
+        if isinstance(input_vocab, int):
+            self.source_embedder = tf.keras.layers.Embedding(input_vocab, embedding_dim, name='source_embedder')
+        elif input_vocab == 'vector':
+            self.source_embedder = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(embedding_dim), name='source_embedder')
+        else:
+            raise ValueError(
+                "`input_vocab` must be an integer if the input sequence is token-valued or "
+                "'vector' if the input sequence is vector-valued.")
+
+        if isinstance(target_vocab, int):
+            self.target_embedder = tf.keras.layers.Embedding(target_vocab, embedding_dim, name='target_embedder')
+        elif target_vocab == 'vector':
+            self.target_embedder = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(embedding_dim), name='target_embedder')
+        else:
+            raise ValueError(
+                "`input_vocab` must be an integer if the input sequence is token-valued or "
+                "'vector' if the input sequence is vector-valued.")
+
+        self.pos_embedding_adder_input = AddPositionalEmbedding(name='add_pos_embedding_input')
+        self.pos_embedding_adder_target = AddPositionalEmbedding(name='add_pos_embedding_target')
+
+        self.encoder = Encoder(num_layers=num_layers, num_heads=num_heads, dff=dff, dropout_rate=dropout_rate, name='encoder')
+        self.decoder = Decoder(num_layers=num_layers, num_heads=num_heads, dff=dff,
+          dropout_rate=dropout_rate, name='decoder')
+
+
+        self.final_layer = tf.keras.layers.Dense(output_dim, name='final_layer')
+
+        super().__init__(name=name)
+        self.num_layers = num_layers
+        self.num_heads = num_heads
+        self.dff = dff
+        self.dropout_rate = dropout_rate
+        self.cnn_encoder_args = cnn_encoder_args
+
+    def build(self, input_shape):
+
+        
+
+        _, self.sequence_length, self.d_model = input_shape
+
+        self.enc_layers = [
+            TransformerEncoderLayer(
+                d_model=self.d_model,
+                num_heads=self.num_heads,
+                dff=self.dff,
+                dropout_rate=self.dropout_rate,
+            )
+            for _ in range(self.num_layers)
+        ]
+
+        self.dropout = tf.keras.layers.Dropout(self.dropout_rate)
+
+    def call(self, x):
+        x = self.dropout(x)
+
+        for i in range(self.num_layers):
+            x = self.enc_layers[i](x)
+
+        return x

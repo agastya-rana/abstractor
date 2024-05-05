@@ -4,7 +4,6 @@ from tensorflow.keras import layers, Model
 from transformer_modules import Encoder, Decoder, AddPositionalEmbedding
 from abstracters import SymbolicAbstracter, RelationalAbstracter, AblationAbstractor
 
-
 class Transformer(tf.keras.Model):
     def __init__(self, num_layers, num_heads, dff,
             input_vocab, target_vocab, embedding_dim, output_dim,

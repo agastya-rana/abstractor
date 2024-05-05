@@ -60,7 +60,7 @@ print(f'received the following arguments: {args}')
 
 # check if GPU is being used
 print(tf.config.list_physical_devices())
-assert len(tf.config.list_physical_devices('GPU')) > 0
+#assert len(tf.config.list_physical_devices('GPU')) > 0
 
 # set up W&B logging
 import wandb
@@ -112,6 +112,7 @@ seqs_train, seqs_val, sorted_seqs_train, sorted_seqs_val, object_seqs_train, obj
 seqs_length = seqs.shape[1]
 
 source_train, source_val, source_test = object_seqs_train, object_seqs_val, object_seqs_test
+#print(source_train.shape, target_train.shape, labels_train.shape)
 #endregion
 
 # region kwargs for all the models
@@ -146,6 +147,7 @@ autoreg_abstractor_kwargs = dict(
         encoder_kwargs=dict(num_layers=2, num_heads=4, dff=64, dropout_rate=0.1),
         abstractor_kwargs=dict(
             num_layers=2,
+            dff=64,
             rel_dim=4,
             symbol_dim=64,
             proj_dim=8,
@@ -319,7 +321,6 @@ elif args.model == 'abstractor':
 
             argsort_model.compile(loss=loss, optimizer=create_opt(), metrics=metrics)
             argsort_model((source_train[:32], target_train[:32]));
-
             return argsort_model
         
         group_name = 'Abstractor'
@@ -437,8 +438,8 @@ elif args.model == 'simple-abstractor':
                 **simple_abstractor_kwargs)
 
             argsort_model.compile(loss=loss, optimizer=create_opt(), metrics=metrics)
-            argsort_model((source_train[:32], target_train[:32]));
-
+            x = argsort_model((source_train[:32], target_train[:32]));
+            print(x.shape)
             return argsort_model
         
         group_name = 'Simple Abstractor'

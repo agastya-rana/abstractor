@@ -5,8 +5,71 @@ import tensorflow as tf
 from attention import GlobalSelfAttention, CausalSelfAttention, CrossAttention
 
 # TODO: bring implementation of layernorm_first here?
-
+## Changed this so that Encoder is a general class that implements nothing
+## Have attention_encoder and also cnn_encoder that inherit from it.
 class Encoder(tf.keras.layers.Layer):
+    def __init__(self, encoder_type="transformer", **encoder_kwargs):
+        super().__init__(name="Encoder_General")
+        self.encoder_type = encoder_type
+
+        if self.encoder_type == "cnn":
+            self.encoder = CNNEncoder(**encoder_kwargs)
+
+        elif self.encoder_type == "transformer":
+            self.encoder = TransformerEncoder(**encoder_kwargs)
+        else:
+            raise ValueError("Invalid encoder_type. Must be 'cnn' or 'transformer'.")
+
+    def build(self, input_shape):
+        self.encoder.build(input_shape)
+
+    def call(self, x):
+        return self.encoder(x)
+
+
+class CNNEncoder(tf.keras.layers.Layer):
+    def __init__(self, num_layers, num_kernels, kernel_size, stride, dropout_rate=0.1, name="cnn_encoder", dropout_in_cnn=False, mlp=[], **kwargs):
+        super().__init__(name=name)
+        self.num_layers = num_layers
+        self.dropout_rate = dropout_rate
+        self.num_kernels = num_kernels
+        self.kernel_size = kernel_size
+        self.stride = stride
+        self.dropout_in_cnn = dropout_in_cnn
+        self.mlp = mlp
+
+    def build(self, input_shape):
+        self.enc_layers = []
+        for _ in range(self.num_layers):
+            self.enc_layers.append(
+                tf.keras.layers.Conv2D(
+                    filters=self.num_kernels,
+                    kernel_size=self.kernel_size,
+                    strides=self.stride,
+                    padding="same",
+                    activation="ReLU"
+                )
+            )
+            self.enc_layers.append(tf.keras.layers.BatchNormalization())
+            self.enc_layers.append(tf.keras.layers.ReLU())
+            if self.dropout_in_cnn:
+                self.enc_layers.append(tf.keras.layers.Dropout(self.dropout_rate))
+
+        if self.mlp:
+            self.flatten = tf.keras.layers.Flatten()
+            self.enc_layers.append(self.flatten)
+            for layer_size in self.mlp:
+                self.enc_layers.append(tf.keras.layers.Dense(layer_size, activation="relu"))
+                self.enc_layers.append(tf.keras.layers.Dropout(self.dropout_rate))
+
+
+    def call(self, x):
+        for layer in self.enc_layers:
+            x = layer(x)
+        return x
+
+
+class TransformerEncoder(tf.keras.layers.Layer):
     def __init__(self, num_layers, num_heads, dff, dropout_rate=0.1, name="encoder"):
         super().__init__(name=name)
         self.num_layers = num_layers
@@ -18,7 +81,7 @@ class Encoder(tf.keras.layers.Layer):
         _, self.sequence_length, self.d_model = input_shape
 
         self.enc_layers = [
-            EncoderLayer(
+            TransformerEncoderLayer(
                 d_model=self.d_model,
                 num_heads=self.num_heads,
                 dff=self.dff,
@@ -38,7 +101,7 @@ class Encoder(tf.keras.layers.Layer):
         return x
 
 
-class EncoderLayer(tf.keras.layers.Layer):
+class TransformerEncoderLayer(tf.keras.layers.Layer):
     def __init__(self, *, d_model, num_heads, dff, dropout_rate=0.1):
         super().__init__()
 

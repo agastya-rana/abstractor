@@ -7,7 +7,7 @@ This didn't work especially well in our experiments.
 """
 
 import tensorflow as tf
-from transformer_modules import EncoderLayer, AddPositionalEmbedding
+from transformer_modules import TransformerEncoderLayer, AddPositionalEmbedding
 from symbol_retrieving_abstractor import MultiHeadSymbolRetriever, MultiHeadSymbolRetrieval2
 
 class SyntacticAbstractor(tf.keras.layers.Layer):

@@ -8,7 +8,7 @@ Steps to reproduce experiments:
 
 
     ```
-    python evaluate_argsort_model_learning_curves.py --model {{model_name}} --pretraining_mode "none" --eval_task_data_path "object_sorting_datasets/product_structure_object_sort_dataset.npy" --n_epochs 400 --early_stopping True --min_train_size 100 --max_train_size 3000 --train_size_step 100 --num_trials 10 --start_trial 0 --pretraining_train_size 1000 --wandb_project_name "object_argsort_autoregressive"
+    python evaluate_argsort_model_learning_curves.py --model 'abstractor' --pretraining_mode "none" --eval_task_data_path "object_sorting_datasets/product_structure_object_sort_dataset.npy" --n_epochs 400 --early_stopping True --min_train_size 100 --max_train_size 3000 --train_size_step 100 --num_trials 10 --start_trial 0 --pretraining_train_size 1000 --wandb_project_name "object_argsort_autoregressive"
     ```
 
     This replicates the results in section 4.2. To replicate the results in section 4.3, run the following for each `model_name` in `['simple-abstractor', 'transformer']`:
